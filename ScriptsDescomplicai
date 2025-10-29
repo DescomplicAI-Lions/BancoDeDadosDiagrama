@@ -208,6 +208,17 @@ CREATE TABLE IF NOT EXISTS descomplicai.review(
         REFERENCES descomplicai.order(id)
 );
 
+-- INVENTORY_HIST_STATUS
+CREATE TABLE IF NOT EXISTS descomplicai.inventory_hist_status(
+    idlog SERIAL PRIMARY KEY,
+    status_old VARCHAR(100),
+    status_new VARCHAR(100),
+    last_update TIMESTAMP DEFAULT now(),
+    inventory_id INTEGER,
+    CONSTRAINT fk_inventory FOREIGN KEY (inventory_id)
+        REFERENCES descomplicai.inventory(id)
+);
+
 -- ==============================================
 -- TRIGGERS
 -- ==============================================
@@ -276,3 +287,70 @@ AFTER UPDATE OF amount ON descomplicai.inventory
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.update_product_availability();
 
+-- LOG INVENTORY_HIST_STATUS
+CREATE OR REPLACE FUNCTION descomplicai.log_inventory_hist_status()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+        INSERT INTO descomplicai.inventory_hist_status (status_old, status_new, inventory_id)
+        VALUES (OLD.status, NEW.status, OLD.id);
+    END IF;
+
+    NEW.last_update := now();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_inventory_hist_status
+AFTER UPDATE ON descomplicai.inventory
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.log_inventory_hist_status();
+
+-- INSERT ORDER_ADDRESS
+CREATE OR REPLACE FUNCTION descomplicai.fn_insert_order_address()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO descomplicai.order_address (
+    order_id,
+    street,
+    typeof,
+    cep,
+    number_address,
+    neighborhood,
+    complement,
+    reference,
+    city,
+    uf
+  )
+  SELECT DISTINCT ON (o.id)
+    o.id AS order_id,
+    a.street,
+    ua.typeof,
+    a.cep,
+    a.number_address,
+    a.neighborhood,
+    a.complement,
+    a.reference,
+    a.city,
+    a.uf
+  FROM descomplicai."order" AS o
+  JOIN descomplicai."user" AS u
+    ON u.id = o.user_id
+  JOIN descomplicai.user_address AS ua
+    ON ua.user_id = u.id
+  JOIN descomplicai.address AS a
+    ON a.id = ua.address_id
+  WHERE o.id = NEW.id
+    AND ua.typeof IS NOT NULL
+  ORDER BY o.id, ua.typeof DESC
+  ON CONFLICT (order_id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_insert_order_address
+AFTER INSERT ON descomplicai."order"
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_insert_order_address();
