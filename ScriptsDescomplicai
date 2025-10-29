@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.user(
   password_user VARCHAR(60) NOT NULL,
   creation_data TIMESTAMP DEFAULT now(),
   profile_image VARCHAR(200),
-  typeof  VARCHAR(100),
+  type_user  VARCHAR(100),
   status VARCHAR(100),
   phone VARCHAR(14),
   temp_login_token VARCHAR(170),
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.address(
 CREATE TABLE IF NOT EXISTS descomplicai.user_address(
     user_id INTEGER NOT NULL,
     address_id INTEGER NOT NULL,
-    typeof VARCHAR(30) NOT NULL CHECK(typeof in ('entrega', 'cobranca')),
+    type_address VARCHAR(30) NOT NULL CHECK(type_address in ('entrega', 'cobranca')),
     CONSTRAINT pk_user_address PRIMARY KEY (user_id, address_id),
     CONSTRAINT fk_user FOREIGN KEY (user_id)
         REFERENCES descomplicai.user(id),
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.order(
 CREATE TABLE IF NOT EXISTS descomplicai.order_address(
   order_id INTEGER NOT NULL,
   street VARCHAR(150) NOT NULL,
-  typeof VARCHAR(30),
+  type_address VARCHAR(30),
   cep VARCHAR(8) NOT NULL,
   number_address VARCHAR(10) NOT NULL,
   neighborhood VARCHAR(60) NOT NULL,
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.order_hist(
 CREATE TABLE IF NOT EXISTS descomplicai.promotion(
   id SERIAL PRIMARY KEY,
   name_promotion VARCHAR(100) NOT NULL,
-  typeof VARCHAR(100) NOT NULL,
+  type_promotion VARCHAR(100) NOT NULL,
   value NUMERIC(10,2),
   start_date DATE,
   end_date DATE,
