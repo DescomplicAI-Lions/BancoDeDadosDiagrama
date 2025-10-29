@@ -1,0 +1,278 @@
+-- ==============================================
+-- TABELAS
+-- ==============================================
+
+-- USER
+CREATE TABLE IF NOT EXISTS descomplicai.user(
+  id SERIAL PRIMARY KEY,
+  name_user VARCHAR(100) NOT NULL,
+  email VARCHAR(100),
+  password_user VARCHAR(60) NOT NULL,
+  creation_data TIMESTAMP DEFAULT now(),
+  profile_image VARCHAR(200),
+  typeof  VARCHAR(100),
+  status VARCHAR(100),
+  phone VARCHAR(14),
+  temp_login_token VARCHAR(170),
+  temp_login_expire DATE
+);
+
+-- ADDRESS
+CREATE TABLE IF NOT EXISTS descomplicai.address(
+  id SERIAL PRIMARY KEY,
+  street VARCHAR(150) NOT NULL,
+  cep VARCHAR(8) NOT NULL,
+  number_address VARCHAR(10) NOT NULL,
+  neighborhood VARCHAR(60) NOT NULL,
+  complement VARCHAR(100),
+  reference  VARCHAR(200),
+  city VARCHAR(100) NOT NULL,
+  uf VARCHAR(2)
+);
+
+-- USER_ADDRESS
+CREATE TABLE IF NOT EXISTS descomplicai.user_address(
+    user_id INTEGER NOT NULL,
+    address_id INTEGER NOT NULL,
+    typeof VARCHAR(30) NOT NULL CHECK(typeof in ('entrega', 'cobranca')),
+    CONSTRAINT pk_user_address PRIMARY KEY (user_id, address_id),
+    CONSTRAINT fk_user FOREIGN KEY (user_id)
+        REFERENCES descomplicai.user(id),
+    CONSTRAINT fk_address FOREIGN KEY (address_id)
+        REFERENCES descomplicai.address(id)
+);
+
+-- INVENTORY
+CREATE TABLE IF NOT EXISTS descomplicai.inventory(
+    id SERIAL PRIMARY KEY,
+    amount INTEGER,
+    amount_min INTEGER,
+    last_update TIMESTAMP DEFAULT now(),
+    status VARCHAR(100),
+    product_id INTEGER,
+    CONSTRAINT fk_product FOREIGN KEY (product_id)
+        REFERENCES descomplicai.product(id)
+);
+
+-- PRODUCT
+CREATE TABLE IF NOT EXISTS descomplicai.product(
+    id SERIAL PRIMARY KEY,
+    name_product VARCHAR(100) NOT NULL,
+    description VARCHAR(300),
+    price NUMERIC(10,2) NOT NULL,
+    availability BOOLEAN,
+    image VARCHAR(200),
+    extras VARCHAR(200)
+);
+
+-- CATEGORY
+CREATE TABLE IF NOT EXISTS descomplicai.category(
+    id SERIAL PRIMARY KEY,
+    name_category VARCHAR(100) NOT NULL,
+    description VARCHAR(200),
+    image VARCHAR(200),
+    status VARCHAR(200)
+);
+
+-- PRODUCT_CATEGORIES
+CREATE TABLE IF NOT EXISTS descomplicai.product_categories(
+    product_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    CONSTRAINT pk_product_categories PRIMARY KEY (product_id, category_id),
+    CONSTRAINT fk_product FOREIGN KEY (product_id)
+        REFERENCES descomplicai.product(id),
+    CONSTRAINT fk_category FOREIGN KEY (category_id)
+        REFERENCES descomplicai.category(id)
+);
+
+-- ORDER
+CREATE TABLE IF NOT EXISTS descomplicai.order(
+    id SERIAL PRIMARY KEY,
+    order_date TIMESTAMP DEFAULT now(),
+    status VARCHAR(100),
+    delivery_tax NUMERIC(10,2),
+    payment_method VARCHAR(100),
+    user_id INTEGER,
+    total_value NUMERIC(10,2),
+    CONSTRAINT fk_user FOREIGN KEY (user_id)
+      REFERENCES descomplicai.user(id)
+);
+
+-- ORDER_ADDRESS
+CREATE TABLE IF NOT EXISTS descomplicai.order_address(
+  order_id INTEGER NOT NULL,
+  street VARCHAR(150) NOT NULL,
+  typeof VARCHAR(30),
+  cep VARCHAR(8) NOT NULL,
+  number_address VARCHAR(10) NOT NULL,
+  neighborhood VARCHAR(60) NOT NULL,
+  complement VARCHAR(100),
+  reference  VARCHAR(200),
+  city VARCHAR(100) NOT NULL,
+  uf VARCHAR(2),
+  CONSTRAINT pk_order_address PRIMARY KEY (order_id),
+  CONSTRAINT fk_order FOREIGN KEY (order_id)
+      REFERENCES descomplicai.order(id)
+);
+
+-- PRODUCT_ORDER
+CREATE TABLE IF NOT EXISTS descomplicai.product_order(
+  product_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL,
+  total_value NUMERIC(10,2),
+  CONSTRAINT pk_product_order PRIMARY KEY (order_id, product_id),
+  CONSTRAINT fk_product FOREIGN KEY (product_id)
+      REFERENCES descomplicai.product(id),
+  CONSTRAINT fk_order FOREIGN KEY (order_id)
+      REFERENCES descomplicai.order(id)
+);
+
+-- ORDER_HIST
+CREATE TABLE IF NOT EXISTS descomplicai.order_hist(
+  idlog SERIAL PRIMARY KEY,
+  order_id INTEGER,
+  status VARCHAR(100),
+  details VARCHAR(200),
+  date_alter TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT fk_order FOREIGN KEY (order_id)
+    REFERENCES descomplicai.order(id)
+);
+
+-- PROMOTION
+CREATE TABLE IF NOT EXISTS descomplicai.promotion(
+  id SERIAL PRIMARY KEY,
+  name_promotion VARCHAR(100) NOT NULL,
+  typeof VARCHAR(100) NOT NULL,
+  value NUMERIC(10,2),
+  start_date DATE,
+  end_date DATE,
+  active BOOLEAN
+);
+
+-- PROMOTION_PRODUCTS
+CREATE TABLE IF NOT EXISTS descomplicai.promotion_products(
+  product_id INTEGER,
+  promotion_id INTEGER,
+  CONSTRAINT pk_promotion_products PRIMARY KEY (product_id, promotion_id),
+  CONSTRAINT fk_product FOREIGN KEY (product_id)
+    REFERENCES descomplicai.product(id),
+  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+    REFERENCES descomplicai.promotion(id)
+);
+
+-- PROMOTION_CATEGORIES
+CREATE TABLE IF NOT EXISTS descomplicai.promotion_categories(
+  category_id INTEGER,
+  promotion_id INTEGER,
+  CONSTRAINT pk_promotion_categories PRIMARY KEY (category_id, promotion_id),
+  CONSTRAINT fk_category FOREIGN KEY (category_id)
+    REFERENCES descomplicai.category(id),
+  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+    REFERENCES descomplicai.promotion(id)
+);
+
+-- PROMOTION_PRODUCT_ORDER
+CREATE TABLE IF NOT EXISTS descomplicai.promotion_product_order(
+  product_order_id INTEGER,
+  promotion_id INTEGER,
+  CONSTRAINT pk_promotion_product_order PRIMARY KEY (product_order_id, promotion_id),
+  CONSTRAINT fk_product_order FOREIGN KEY (product_order_id)
+    REFERENCES descomplicai.product_order(id),
+  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+    REFERENCES descomplicai.promotion(id)
+);
+
+-- INVENTORY_HIST
+CREATE TABLE IF NOT EXISTS descomplicai.inventory_hist(
+    idlog SERIAL PRIMARY KEY,
+    amount_old INTEGER,
+    amount_new INTEGER,
+    last_update TIMESTAMP DEFAULT now(),
+    inventory_id INTEGER,
+    CONSTRAINT fk_inventory FOREIGN KEY (inventory_id)
+        REFERENCES descomplicai.inventory(id)
+);
+
+-- REVIEW
+CREATE TABLE IF NOT EXISTS descomplicai.review(
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    order_id INTEGER NOT NULL,
+    rate SMALLINT,
+    comment_review VARCHAR(300),
+    date_review TIMESTAMP,
+    CONSTRAINT fk_user FOREIGN KEY (user_id)
+        REFERENCES descomplicai.user(id),
+    CONSTRAINT fk_order FOREIGN KEY (order_id)
+        REFERENCES descomplicai.order(id)
+);
+
+-- ==============================================
+-- TRIGGERS
+-- ==============================================
+
+-- LOG INVENTORY_HIST
+CREATE OR REPLACE FUNCTION descomplicai.log_inventory_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.amount IS DISTINCT FROM OLD.amount THEN
+        INSERT INTO descomplicai.inventory_hist (amount_old, amount_new, inventory_id)
+        VALUES (OLD.amount, NEW.amount, OLD.id);
+    END IF;
+
+    NEW.last_update := now();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_inventory_update
+BEFORE UPDATE ON descomplicai.inventory
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.log_inventory_update();
+
+-- UPDATE INVENTORY_STATUS
+CREATE OR REPLACE FUNCTION descomplicai.update_inventory_status()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.amount <= 0 THEN
+        NEW.status := 'Esgotado';
+    ELSIF NEW.amount < NEW.amount_min THEN
+        NEW.status := 'Estoque Baixo';
+    ELSE
+        NEW.status := 'Disponível';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_inventory_status
+BEFORE UPDATE OF amount ON descomplicai.inventory
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.update_inventory_status();
+
+-- UPDATE PRODUCT_AVAILABILITY
+CREATE OR REPLACE FUNCTION descomplicai.update_product_availability()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.amount = 0 THEN
+        UPDATE descomplicai.product
+        SET availability = FALSE
+        WHERE id = NEW.product_id;
+    ELSE
+        UPDATE descomplicai.product
+        SET availability = TRUE
+        WHERE id = NEW.product_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_inventory_amount_zero
+AFTER UPDATE OF amount ON descomplicai.inventory
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.update_product_availability();
+
