@@ -314,7 +314,7 @@ BEGIN
   INSERT INTO descomplicai.order_address (
     order_id,
     street,
-    typeof,
+    type_address,
     cep,
     number_address,
     neighborhood,
@@ -326,7 +326,7 @@ BEGIN
   SELECT DISTINCT ON (o.id)
     o.id AS order_id,
     a.street,
-    ua.typeof,
+    ua.type_address,
     a.cep,
     a.number_address,
     a.neighborhood,
@@ -342,8 +342,8 @@ BEGIN
   JOIN descomplicai.address AS a
     ON a.id = ua.address_id
   WHERE o.id = NEW.id
-    AND ua.typeof IS NOT NULL
-  ORDER BY o.id, ua.typeof DESC
+    AND ua.type_address IS NOT NULL
+  ORDER BY o.id, ua.type_address DESC
   ON CONFLICT (order_id) DO NOTHING;
 
   RETURN NEW;
@@ -354,3 +354,119 @@ CREATE TRIGGER trg_insert_order_address
 AFTER INSERT ON descomplicai."order"
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_insert_order_address();
+
+-- UPDATE_ORDER_TOTAL
+CREATE OR REPLACE FUNCTION descomplicai.fn_update_order_total()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE descomplicai."order" o
+  SET total_value = (
+    COALESCE((
+      SELECT SUM(po.total_value)
+      FROM descomplicai.product_order po
+      WHERE po.order_id = o.id
+    ), 0) + COALESCE(o.delivery_tax, 0)
+  )
+  WHERE o.id = COALESCE(NEW.order_id, OLD.order_id);
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_order_total
+AFTER INSERT OR UPDATE OR DELETE
+ON descomplicai.product_order
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_update_order_total();
+
+-- UPDATE PRODUCT ORDER TOTAL
+CREATE OR REPLACE FUNCTION descomplicai.fn_update_product_order_total()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_price NUMERIC(10,2);
+  v_amount INTEGER;
+  v_discount NUMERIC(10,2) := 0;
+BEGIN
+  SELECT p.price, po.amount
+  INTO v_price, v_amount
+  FROM descomplicai.product_order po
+  JOIN descomplicai.product p ON p.id = po.product_id
+  WHERE po.id = NEW.id;
+
+  SELECT pr.value
+  INTO v_discount
+  FROM descomplicai.promotion pr
+  JOIN descomplicai.promotion_product_order ppo
+    ON pr.id = ppo.promotion_id
+  WHERE ppo.product_order_id = NEW.id
+  LIMIT 1;
+
+  UPDATE descomplicai.product_order
+  SET total_value = GREATEST((v_price * v_amount) - COALESCE(v_discount * v_amount, 0), 0)
+  WHERE id = NEW.id;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_update_product_order_total
+AFTER INSERT OR UPDATE OF product_id, amount
+ON descomplicai.product_order
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_update_product_order_total();
+
+-- INSERT PROMOTION FOR PRODUCT ORDER
+CREATE OR REPLACE FUNCTION descomplicai.fn_insert_promotion_for_product_order()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO descomplicai.promotion_products (product_id, promotion_id)
+  SELECT p.id, pr.id
+  FROM descomplicai.product p
+  JOIN descomplicai.promotion pr
+    ON pr.active = TRUE
+   AND pr.type_promotion = 'produto'
+  WHERE p.id = NEW.product_id
+  ON CONFLICT DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_insert_promotion_for_product_order
+AFTER INSERT
+ON descomplicai.product_order
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_insert_promotion_for_product_order();
+
+-- INSERT PROMOTION ACTIVE PRODUCT ORDER
+CREATE OR REPLACE FUNCTION descomplicai.fn_insert_promotion_product_order()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_promotion_id INTEGER;
+BEGIN
+  SELECT pr.id INTO v_promotion_id
+  FROM descomplicai.promotion pr
+  JOIN descomplicai.promotion_products pp
+    ON pr.id = pp.promotion_id
+  WHERE pp.product_id = NEW.product_id
+    AND pr.active = TRUE
+    AND CURRENT_DATE BETWEEN pr.start_date AND pr.end_date
+  LIMIT 1;
+
+  IF v_promotion_id IS NOT NULL THEN
+    INSERT INTO descomplicai.promotion_product_order (product_order_id, promotion_id)
+    VALUES (NEW.id, v_promotion_id)
+    ON CONFLICT (product_order_id, promotion_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_insert_promotion_product_order
+AFTER INSERT OR UPDATE
+ON descomplicai.product_order
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_insert_promotion_product_order();
+
+-- TODO INSERT PROMOTION FOR CATEGORY
