@@ -469,4 +469,9 @@ ON descomplicai.product_order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_insert_promotion_product_order();
 
--- TODO INSERT PROMOTION FOR CATEGORY
+-- TODO 
+- INSERT PROMOTION FOR CATEGORY
+- POPULAR E TESTAR:
+  - ORDER_HIST
+  - PROMOTION_CATEGORY
+  - REVIEW
