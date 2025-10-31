@@ -133,10 +133,16 @@ CREATE TABLE IF NOT EXISTS descomplicai.order_hist(
   idlog SERIAL PRIMARY KEY,
   order_id INTEGER,
   status VARCHAR(100),
-  details VARCHAR(200),
+  order_date TIMESTAMP,
+  delivery_tax NUMERIC(10,2),
+  payment_method VARCHAR(100),
+  user_id INTEGER,
+  total_value NUMERIC(10,2),
   date_alter TIMESTAMP DEFAULT NOW(),
   CONSTRAINT fk_order FOREIGN KEY (order_id)
-    REFERENCES descomplicai.order(id)
+    REFERENCES descomplicai.order(id),
+  CONSTRAINT fk_user FOREIGN KEY (user_id)
+    REFERENCES descomplicai.user(id)
 );
 
 -- PROMOTION
@@ -469,12 +475,48 @@ ON descomplicai.product_order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_insert_promotion_product_order();
 
+-- LOG ORDER_HIST
+CREATE OR REPLACE FUNCTION descomplicai.log_order_hist()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status IS DISTINCT FROM OLD.status OR
+       NEW.delivery_tax IS DISTINCT FROM OLD.delivery_tax OR
+       NEW.payment_method IS DISTINCT FROM OLD.payment_method OR
+       NEW.total_value IS DISTINCT FROM OLD.total_value
+    THEN
+        INSERT INTO descomplicai.order_hist(
+            order_id,
+            status,
+            delivery_tax,
+            payment_method,
+            user_id,
+            total_value,
+            order_date
+        )
+        VALUES (
+            OLD.id,
+            NEW.status,
+            NEW.delivery_tax,
+            NEW.payment_method,
+            OLD.user_id,
+            NEW.total_value,
+            NEW.order_date
+        );
+    END IF;
+
+    RETURN NEW; 
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_order_hist
+BEFORE UPDATE ON descomplicai.order
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.log_order_hist();
+
 -- TODO 
 - FUNÇÕES:
   - INSERT PROMOTION FOR CATEGORY
   - UPDATE AMOUNT INVENTORY BY PRODUCT_ORDER.STATUS
-  - LOGGING ORDER_HIST
 - POPULAR E TESTAR:
-  - ORDER_HIST
   - PROMOTION_CATEGORY
   - REVIEW
