@@ -225,6 +225,22 @@ CREATE TABLE IF NOT EXISTS descomplicai.inventory_hist_status(
         REFERENCES descomplicai.inventory(id)
 );
 
+-- USER_HIST
+CREATE TABLE IF NOT EXISTS descomplicai.user_hist(
+  idlog SERIAL PRIMARY KEY,
+  user_id INTEGER,
+  name_user VARCHAR(100) NOT NULL,
+  email VARCHAR(100),
+  password_user VARCHAR(60) NOT NULL,
+  creation_data TIMESTAMP,
+  type_user  VARCHAR(100),
+  status VARCHAR(100),
+  phone VARCHAR(14),
+  date_alter_user TIMESTAMP DEFAULT now(),
+  CONSTRAINT fk_user FOREIGN KEY (user_id)
+      REFERENCES descomplicai.user(id)
+);
+
 -- ==============================================
 -- TRIGGERS
 -- ==============================================
@@ -512,6 +528,47 @@ CREATE OR REPLACE TRIGGER trg_order_hist
 BEFORE UPDATE ON descomplicai.order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.log_order_hist();
+
+-- LOG USER_HIST
+CREATE OR REPLACE FUNCTION descomplicai.log_user_hist()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.name_user IS DISTINCT FROM OLD.name_user OR
+       NEW.email IS DISTINCT FROM OLD.email OR
+       NEW.password_user IS DISTINCT FROM OLD.password_user OR
+       NEW.status IS DISTINCT FROM OLD.status OR
+       NEW.phone IS DISTINCT FROM OLD.phone
+    THEN
+        INSERT INTO descomplicai.user_hist(
+            user_id,
+            name_user,
+            email,
+            password_user,
+            creation_data,
+            type_user,
+            status,
+            phone
+        )
+        VALUES (
+            OLD.id,
+            NEW.name_user,
+            NEW.email,
+            NEW.password_user,
+            OLD.creation_data,
+            OLD.type_user,
+            NEW.status,
+            NEW.phone
+        );
+    END IF;
+
+    RETURN NEW; 
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_user_hist
+AFTER INSERT OR UPDATE ON descomplicai.user
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.log_user_hist();
 
 -- TODO 
 - FUNÇÕES:
