@@ -570,9 +570,48 @@ AFTER INSERT OR UPDATE ON descomplicai.user
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.log_user_hist();
 
+-- FUNCTION UPDATE INVENTORY_AMOUNT
+CREATE OR REPLACE FUNCTION descomplicai.fn_update_inventory_amount()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_product_id INTEGER;
+  v_amount_order INTEGER;
+BEGIN
+  FOR v_product_id, v_amount_order IN
+    SELECT po.product_id, po.amount
+    FROM descomplicai.product_order po
+    WHERE po.order_id = NEW.id
+  LOOP
+    IF OLD.status = 'Em Andamento' AND NEW.status = 'Confirmado' THEN
+      UPDATE descomplicai.inventory
+      SET amount = amount - v_amount_order
+      WHERE product_id = v_product_id;
+
+    ELSIF OLD.status = 'Confirmado' AND NEW.status = 'Em Andamento' THEN
+      UPDATE descomplicai.inventory
+      SET amount = amount + v_amount_order
+      WHERE product_id = v_product_id;
+
+    ELSIF OLD.status = 'Confirmado' AND NEW.status = 'Cancelado' THEN
+      UPDATE descomplicai.inventory
+      SET amount = amount + v_amount_order
+      WHERE product_id = v_product_id;
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_inventory_amount
+AFTER UPDATE OF status
+ON descomplicai."order"
+FOR EACH ROW
+EXECUTE FUNCTION descomplicai.fn_update_inventory_amount();
+
+
 -- TODO 
 - FUNÇÕES:
   - INSERT PROMOTION FOR CATEGORY
-  - UPDATE AMOUNT INVENTORY BY PRODUCT_ORDER.STATUS
 - POPULAR E TESTAR:
   - PROMOTION_CATEGORY
