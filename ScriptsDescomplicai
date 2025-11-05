@@ -608,8 +608,3 @@ AFTER UPDATE OF status
 ON descomplicai."order"
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_update_inventory_amount();
-
-
--- TODO 
-- POPULAR E TESTAR:
-  - PROMOTION_CATEGORY
