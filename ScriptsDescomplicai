@@ -36,33 +36,10 @@ CREATE TABLE IF NOT EXISTS descomplicai.user_address(
     address_id INTEGER NOT NULL,
     type_address VARCHAR(30) NOT NULL CHECK(type_address in ('entrega', 'cobranca')),
     CONSTRAINT pk_user_address PRIMARY KEY (user_id, address_id),
-    CONSTRAINT fk_user FOREIGN KEY (user_id)
+    CONSTRAINT fk_user_address_user FOREIGN KEY (user_id)
         REFERENCES descomplicai.user(id),
-    CONSTRAINT fk_address FOREIGN KEY (address_id)
+    CONSTRAINT fk_user_address_address FOREIGN KEY (address_id)
         REFERENCES descomplicai.address(id)
-);
-
--- INVENTORY
-CREATE TABLE IF NOT EXISTS descomplicai.inventory(
-    id SERIAL PRIMARY KEY,
-    amount INTEGER,
-    amount_min INTEGER,
-    last_update TIMESTAMP DEFAULT now(),
-    status VARCHAR(100),
-    product_id INTEGER,
-    CONSTRAINT fk_product FOREIGN KEY (product_id)
-        REFERENCES descomplicai.product(id)
-);
-
--- PRODUCT
-CREATE TABLE IF NOT EXISTS descomplicai.product(
-    id SERIAL PRIMARY KEY,
-    name_product VARCHAR(100) NOT NULL,
-    description VARCHAR(300),
-    price NUMERIC(10,2) NOT NULL,
-    availability BOOLEAN,
-    image VARCHAR(200),
-    extras VARCHAR(200)
 );
 
 -- CATEGORY
@@ -74,14 +51,40 @@ CREATE TABLE IF NOT EXISTS descomplicai.category(
     status VARCHAR(200)
 );
 
--- PRODUCT_CATEGORIES
+-- PRODUCT (ADDED category_id)
+CREATE TABLE IF NOT EXISTS descomplicai.product(
+    id SERIAL PRIMARY KEY,
+    name_product VARCHAR(100) NOT NULL,
+    description VARCHAR(300),
+    price NUMERIC(10,2) NOT NULL,
+    availability BOOLEAN,
+    image VARCHAR(200),
+    extras VARCHAR(200),
+    category_id INTEGER, -- Added this column for primary category
+    CONSTRAINT fk_product_category FOREIGN KEY (category_id)
+        REFERENCES descomplicai.category(id)
+);
+
+-- INVENTORY
+CREATE TABLE IF NOT EXISTS descomplicai.inventory(
+    id SERIAL PRIMARY KEY,
+    amount INTEGER,
+    amount_min INTEGER,
+    last_update TIMESTAMP DEFAULT now(),
+    status VARCHAR(100),
+    product_id INTEGER UNIQUE, -- Product ID should be unique in inventory
+    CONSTRAINT fk_inventory_product FOREIGN KEY (product_id)
+        REFERENCES descomplicai.product(id)
+);
+
+-- PRODUCT_CATEGORIES (For secondary categories if needed)
 CREATE TABLE IF NOT EXISTS descomplicai.product_categories(
     product_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,
     CONSTRAINT pk_product_categories PRIMARY KEY (product_id, category_id),
-    CONSTRAINT fk_product FOREIGN KEY (product_id)
+    CONSTRAINT fk_product_categories_product FOREIGN KEY (product_id)
         REFERENCES descomplicai.product(id),
-    CONSTRAINT fk_category FOREIGN KEY (category_id)
+    CONSTRAINT fk_product_categories_category FOREIGN KEY (category_id)
         REFERENCES descomplicai.category(id)
 );
 
@@ -94,7 +97,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.order(
     payment_method VARCHAR(100),
     user_id INTEGER,
     total_value NUMERIC(10,2),
-    CONSTRAINT fk_user FOREIGN KEY (user_id)
+    CONSTRAINT fk_order_user FOREIGN KEY (user_id)
       REFERENCES descomplicai.user(id)
 );
 
@@ -111,20 +114,20 @@ CREATE TABLE IF NOT EXISTS descomplicai.order_address(
   city VARCHAR(100) NOT NULL,
   uf VARCHAR(2),
   CONSTRAINT pk_order_address PRIMARY KEY (order_id),
-  CONSTRAINT fk_order FOREIGN KEY (order_id)
+  CONSTRAINT fk_order_address_order FOREIGN KEY (order_id)
       REFERENCES descomplicai.order(id)
 );
 
--- PRODUCT_ORDER
+-- PRODUCT_ORDER (Composite PK)
 CREATE TABLE IF NOT EXISTS descomplicai.product_order(
   product_id INTEGER NOT NULL,
   order_id INTEGER NOT NULL,
   amount INTEGER NOT NULL,
   total_value NUMERIC(10,2),
   CONSTRAINT pk_product_order PRIMARY KEY (order_id, product_id),
-  CONSTRAINT fk_product FOREIGN KEY (product_id)
+  CONSTRAINT fk_product_order_product FOREIGN KEY (product_id)
       REFERENCES descomplicai.product(id),
-  CONSTRAINT fk_order FOREIGN KEY (order_id)
+  CONSTRAINT fk_product_order_order FOREIGN KEY (order_id)
       REFERENCES descomplicai.order(id)
 );
 
@@ -133,15 +136,15 @@ CREATE TABLE IF NOT EXISTS descomplicai.order_hist(
   idlog SERIAL PRIMARY KEY,
   order_id INTEGER,
   status VARCHAR(100),
-  order_date TIMESTAMP,
+  order_date TIMESTAMP, -- This should be the original order date
   delivery_tax NUMERIC(10,2),
   payment_method VARCHAR(100),
   user_id INTEGER,
   total_value NUMERIC(10,2),
   date_alter TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT fk_order FOREIGN KEY (order_id)
+  CONSTRAINT fk_order_hist_order FOREIGN KEY (order_id)
     REFERENCES descomplicai.order(id),
-  CONSTRAINT fk_user FOREIGN KEY (user_id)
+  CONSTRAINT fk_order_hist_user FOREIGN KEY (user_id)
     REFERENCES descomplicai.user(id)
 );
 
@@ -153,7 +156,8 @@ CREATE TABLE IF NOT EXISTS descomplicai.promotion(
   value NUMERIC(10,2),
   start_date DATE,
   end_date DATE,
-  active BOOLEAN
+  active BOOLEAN,
+  priority INTEGER DEFAULT 0 -- Added priority for selecting promotions
 );
 
 -- PROMOTION_PRODUCTS
@@ -161,9 +165,9 @@ CREATE TABLE IF NOT EXISTS descomplicai.promotion_products(
   product_id INTEGER,
   promotion_id INTEGER,
   CONSTRAINT pk_promotion_products PRIMARY KEY (product_id, promotion_id),
-  CONSTRAINT fk_product FOREIGN KEY (product_id)
+  CONSTRAINT fk_promotion_products_product FOREIGN KEY (product_id)
     REFERENCES descomplicai.product(id),
-  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+  CONSTRAINT fk_promotion_products_promotion FOREIGN KEY (promotion_id)
     REFERENCES descomplicai.promotion(id)
 );
 
@@ -172,20 +176,21 @@ CREATE TABLE IF NOT EXISTS descomplicai.promotion_categories(
   category_id INTEGER,
   promotion_id INTEGER,
   CONSTRAINT pk_promotion_categories PRIMARY KEY (category_id, promotion_id),
-  CONSTRAINT fk_category FOREIGN KEY (category_id)
+  CONSTRAINT fk_promotion_categories_category FOREIGN KEY (category_id)
     REFERENCES descomplicai.category(id),
-  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+  CONSTRAINT fk_promotion_categories_promotion FOREIGN KEY (promotion_id)
     REFERENCES descomplicai.promotion(id)
 );
 
--- PROMOTION_PRODUCT_ORDER
+-- PROMOTION_PRODUCT_ORDER (Corrected FK to composite PK of product_order)
 CREATE TABLE IF NOT EXISTS descomplicai.promotion_product_order(
-  product_order_id INTEGER,
+  order_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
   promotion_id INTEGER,
-  CONSTRAINT pk_promotion_product_order PRIMARY KEY (product_order_id, promotion_id),
-  CONSTRAINT fk_product_order FOREIGN KEY (product_order_id)
-    REFERENCES descomplicai.product_order(id),
-  CONSTRAINT fk_promotion FOREIGN KEY (promotion_id)
+  CONSTRAINT pk_promotion_product_order PRIMARY KEY (order_id, product_id), -- Only one promotion per product_order item
+  CONSTRAINT fk_promotion_product_order_product_order FOREIGN KEY (order_id, product_id)
+    REFERENCES descomplicai.product_order(order_id, product_id),
+  CONSTRAINT fk_promotion_product_order_promotion FOREIGN KEY (promotion_id)
     REFERENCES descomplicai.promotion(id)
 );
 
@@ -196,7 +201,7 @@ CREATE TABLE IF NOT EXISTS descomplicai.inventory_hist(
     amount_new INTEGER,
     last_update TIMESTAMP DEFAULT now(),
     inventory_id INTEGER,
-    CONSTRAINT fk_inventory FOREIGN KEY (inventory_id)
+    CONSTRAINT fk_inventory_hist_inventory FOREIGN KEY (inventory_id)
         REFERENCES descomplicai.inventory(id)
 );
 
@@ -208,9 +213,9 @@ CREATE TABLE IF NOT EXISTS descomplicai.review(
     rate SMALLINT,
     comment_review VARCHAR(300),
     date_review TIMESTAMP,
-    CONSTRAINT fk_user FOREIGN KEY (user_id)
+    CONSTRAINT fk_review_user FOREIGN KEY (user_id)
         REFERENCES descomplicai.user(id),
-    CONSTRAINT fk_order FOREIGN KEY (order_id)
+    CONSTRAINT fk_review_order FOREIGN KEY (order_id)
         REFERENCES descomplicai.order(id)
 );
 
@@ -221,23 +226,23 @@ CREATE TABLE IF NOT EXISTS descomplicai.inventory_hist_status(
     status_new VARCHAR(100),
     last_update TIMESTAMP DEFAULT now(),
     inventory_id INTEGER,
-    CONSTRAINT fk_inventory FOREIGN KEY (inventory_id)
+    CONSTRAINT fk_inventory_hist_status_inventory FOREIGN KEY (inventory_id)
         REFERENCES descomplicai.inventory(id)
 );
 
--- USER_HIST
+-- USER_HIST (Removed password_user for security)
 CREATE TABLE IF NOT EXISTS descomplicai.user_hist(
   idlog SERIAL PRIMARY KEY,
   user_id INTEGER,
-  name_user VARCHAR(100) NOT NULL,
+  name_user VARCHAR(100), -- NOT NULL removed, as it might be an update for other fields
   email VARCHAR(100),
-  password_user VARCHAR(60) NOT NULL,
+  -- password_user VARCHAR(60), -- REMOVED FOR SECURITY
   creation_data TIMESTAMP,
   type_user  VARCHAR(100),
   status VARCHAR(100),
   phone VARCHAR(14),
   date_alter_user TIMESTAMP DEFAULT now(),
-  CONSTRAINT fk_user FOREIGN KEY (user_id)
+  CONSTRAINT fk_user_hist_user FOREIGN KEY (user_id)
       REFERENCES descomplicai.user(id)
 );
 
@@ -254,13 +259,13 @@ BEGIN
         VALUES (OLD.amount, NEW.amount, OLD.id);
     END IF;
 
-    NEW.last_update := now();
+    NEW.last_update := now(); -- This is fine for BEFORE trigger
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_inventory_update
+CREATE OR REPLACE TRIGGER trg_inventory_update
 BEFORE UPDATE ON descomplicai.inventory
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.log_inventory_update();
@@ -281,7 +286,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_inventory_status
+CREATE OR REPLACE TRIGGER trg_inventory_status
 BEFORE UPDATE OF amount ON descomplicai.inventory
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.update_inventory_status();
@@ -304,12 +309,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_inventory_amount_zero
+CREATE OR REPLACE TRIGGER trg_inventory_amount_zero
 AFTER UPDATE OF amount ON descomplicai.inventory
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.update_product_availability();
 
--- LOG INVENTORY_HIST_STATUS
+-- LOG INVENTORY_HIST_STATUS (Removed NEW.last_update as it's an AFTER trigger)
 CREATE OR REPLACE FUNCTION descomplicai.log_inventory_hist_status()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -317,9 +322,7 @@ BEGIN
         INSERT INTO descomplicai.inventory_hist_status (status_old, status_new, inventory_id)
         VALUES (OLD.status, NEW.status, OLD.id);
     END IF;
-
-    NEW.last_update := now();
-
+    -- Removed NEW.last_update := now(); as it's an AFTER trigger
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -365,14 +368,20 @@ BEGIN
     ON a.id = ua.address_id
   WHERE o.id = NEW.id
     AND ua.type_address IS NOT NULL
-  ORDER BY o.id, ua.type_address DESC
+  ORDER BY o.id,
+           CASE -- Prioritize delivery address, then billing, then any other
+               WHEN ua.type_address = 'entrega' THEN 1
+               WHEN ua.type_address = 'cobranca' THEN 2
+               ELSE 3
+           END,
+           a.id DESC -- Fallback for consistent choice if multiple of same type
   ON CONFLICT (order_id) DO NOTHING;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_insert_order_address
+CREATE OR REPLACE TRIGGER trg_insert_order_address
 AFTER INSERT ON descomplicai."order"
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_insert_order_address();
@@ -389,19 +398,19 @@ BEGIN
       WHERE po.order_id = o.id
     ), 0) + COALESCE(o.delivery_tax, 0)
   )
-  WHERE o.id = COALESCE(NEW.order_id, OLD.order_id);
+  WHERE o.id = COALESCE(NEW.order_id, OLD.order_id); -- Correctly uses NEW/OLD order_id
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_update_order_total
+CREATE OR REPLACE TRIGGER trg_update_order_total
 AFTER INSERT OR UPDATE OR DELETE
 ON descomplicai.product_order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_update_order_total();
 
--- UPDATE PRODUCT ORDER TOTAL
+-- UPDATE PRODUCT ORDER TOTAL (Corrected to use composite PK)
 CREATE OR REPLACE FUNCTION descomplicai.fn_update_product_order_total()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -409,23 +418,29 @@ DECLARE
   v_amount INTEGER;
   v_discount NUMERIC(10,2) := 0;
 BEGIN
-  SELECT p.price, po.amount
-  INTO v_price, v_amount
-  FROM descomplicai.product_order po
-  JOIN descomplicai.product p ON p.id = po.product_id
-  WHERE po.id = NEW.id;
+  -- Fetch product price based on NEW.product_id
+  SELECT p.price
+  INTO v_price
+  FROM descomplicai.product p
+  WHERE p.id = NEW.product_id;
 
+  -- Use NEW.amount directly from the current product_order row
+  v_amount := NEW.amount;
+
+  -- Fetch discount for the specific product_order item (using composite key)
   SELECT pr.value
   INTO v_discount
   FROM descomplicai.promotion pr
   JOIN descomplicai.promotion_product_order ppo
     ON pr.id = ppo.promotion_id
-  WHERE ppo.product_order_id = NEW.id
+  WHERE ppo.order_id = NEW.order_id
+    AND ppo.product_id = NEW.product_id
   LIMIT 1;
 
+  -- Update total_value for the specific product_order item (using composite key)
   UPDATE descomplicai.product_order
-  SET total_value = GREATEST((v_price * v_amount) - COALESCE(v_discount * v_amount, 0), 0)
-  WHERE id = NEW.id;
+  SET total_value = GREATEST((v_price * v_amount) - COALESCE(v_discount, 0), 0) -- Discount is applied directly, not multiplied by amount again
+  WHERE order_id = NEW.order_id AND product_id = NEW.product_id;
 
   RETURN NEW;
 END;
@@ -437,13 +452,14 @@ ON descomplicai.product_order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_update_product_order_total();
 
--- INSERT PROMOTION FUNCTION
+-- INSERT PROMOTION FUNCTION (Corrected to use composite PK for promotion_product_order)
 CREATE OR REPLACE FUNCTION descomplicai.fn_apply_single_promotion_to_product_order()
 RETURNS TRIGGER AS $$
 DECLARE
   v_promotion_id INTEGER := NULL;
   v_category_id INTEGER := NULL;
 BEGIN
+  -- 1. Try to find an active PRODUCT-SPECIFIC promotion for the new product_order item
   SELECT pr.id
   INTO v_promotion_id
   FROM descomplicai.promotion pr
@@ -452,10 +468,12 @@ BEGIN
     AND pr.active = TRUE
     AND pr.type_promotion = 'produto'
     AND CURRENT_DATE BETWEEN pr.start_date AND pr.end_date
-  ORDER BY pr.priority DESC, pr.id DESC -- Adjust order by as needed
+  ORDER BY pr.priority DESC, pr.id DESC
   LIMIT 1;
 
+  -- 2. If no product-specific promotion is found, try to find an active CATEGORY-SPECIFIC promotion
   IF v_promotion_id IS NULL THEN
+    -- Get the category of the product (now from product table directly)
     SELECT p.category_id
     INTO v_category_id
     FROM descomplicai.product p
@@ -470,31 +488,33 @@ BEGIN
         AND pr.active = TRUE
         AND pr.type_promotion = 'categoria'
         AND CURRENT_DATE BETWEEN pr.start_date AND pr.end_date
-      ORDER BY pr.priority DESC, pr.id DESC -- Adjust order by as needed
+      ORDER BY pr.priority DESC, pr.id DESC
       LIMIT 1;
     END IF;
   END IF;
 
+  -- 3. If a promotion is found (either product or category), insert it into promotion_product_order
   IF v_promotion_id IS NOT NULL THEN
-    INSERT INTO descomplicai.promotion_product_order (product_order_id, promotion_id)
-    VALUES (NEW.id, v_promotion_id)
-    ON CONFLICT (product_order_id, promotion_id) DO NOTHING;
+    INSERT INTO descomplicai.promotion_product_order (order_id, product_id, promotion_id)
+    VALUES (NEW.order_id, NEW.product_id, v_promotion_id)
+    ON CONFLICT (order_id, product_id) DO UPDATE SET promotion_id = EXCLUDED.promotion_id; -- Update if already exists
   END IF;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_apply_single_promotion_to_product_order
+CREATE OR REPLACE TRIGGER trg_apply_single_promotion_to_product_order
 AFTER INSERT
 ON descomplicai.product_order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.fn_apply_single_promotion_to_product_order();
 
--- LOG ORDER_HIST
+-- LOG ORDER_HIST (Corrected order_date and adjusted conditions)
 CREATE OR REPLACE FUNCTION descomplicai.log_order_hist()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- Log if any of the specified fields change
     IF NEW.status IS DISTINCT FROM OLD.status OR
        NEW.delivery_tax IS DISTINCT FROM OLD.delivery_tax OR
        NEW.payment_method IS DISTINCT FROM OLD.payment_method OR
@@ -507,7 +527,7 @@ BEGIN
             payment_method,
             user_id,
             total_value,
-            order_date
+            order_date -- Use OLD.order_date as the original order date
         )
         VALUES (
             OLD.id,
@@ -516,11 +536,11 @@ BEGIN
             NEW.payment_method,
             OLD.user_id,
             NEW.total_value,
-            NEW.order_date
+            OLD.order_date
         );
     END IF;
 
-    RETURN NEW; 
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -529,13 +549,13 @@ BEFORE UPDATE ON descomplicai.order
 FOR EACH ROW
 EXECUTE FUNCTION descomplicai.log_order_hist();
 
--- LOG USER_HIST
+-- LOG USER_HIST (Removed password_user, adjusted NOT NULL for flexibility)
 CREATE OR REPLACE FUNCTION descomplicai.log_user_hist()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.name_user IS DISTINCT FROM OLD.name_user OR
        NEW.email IS DISTINCT FROM OLD.email OR
-       NEW.password_user IS DISTINCT FROM OLD.password_user OR
+       -- NEW.password_user IS DISTINCT FROM OLD.password_user OR -- REMOVED FOR SECURITY
        NEW.status IS DISTINCT FROM OLD.status OR
        NEW.phone IS DISTINCT FROM OLD.phone
     THEN
@@ -543,7 +563,7 @@ BEGIN
             user_id,
             name_user,
             email,
-            password_user,
+            -- password_user, -- REMOVED FOR SECURITY
             creation_data,
             type_user,
             status,
@@ -553,7 +573,7 @@ BEGIN
             OLD.id,
             NEW.name_user,
             NEW.email,
-            NEW.password_user,
+            -- OLD.password_user, -- REMOVED FOR SECURITY (or NEW.password_user if you did hash it)
             OLD.creation_data,
             OLD.type_user,
             NEW.status,
@@ -561,7 +581,7 @@ BEGIN
         );
     END IF;
 
-    RETURN NEW; 
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -573,29 +593,28 @@ EXECUTE FUNCTION descomplicai.log_user_hist();
 -- FUNCTION UPDATE INVENTORY_AMOUNT
 CREATE OR REPLACE FUNCTION descomplicai.fn_update_inventory_amount()
 RETURNS TRIGGER AS $$
-DECLARE
-  v_product_id INTEGER;
-  v_amount_order INTEGER;
 BEGIN
-  FOR v_product_id, v_amount_order IN
+  -- Loop through all product_order items for the current order
+  -- This loop is now safe as NEW.id for order is correctly used
+  FOR r IN
     SELECT po.product_id, po.amount
     FROM descomplicai.product_order po
     WHERE po.order_id = NEW.id
   LOOP
     IF OLD.status = 'Em Andamento' AND NEW.status = 'Confirmado' THEN
       UPDATE descomplicai.inventory
-      SET amount = amount - v_amount_order
-      WHERE product_id = v_product_id;
+      SET amount = amount - r.amount
+      WHERE product_id = r.product_id;
 
     ELSIF OLD.status = 'Confirmado' AND NEW.status = 'Em Andamento' THEN
       UPDATE descomplicai.inventory
-      SET amount = amount + v_amount_order
-      WHERE product_id = v_product_id;
+      SET amount = amount + r.amount
+      WHERE product_id = r.product_id;
 
     ELSIF OLD.status = 'Confirmado' AND NEW.status = 'Cancelado' THEN
       UPDATE descomplicai.inventory
-      SET amount = amount + v_amount_order
-      WHERE product_id = v_product_id;
+      SET amount = amount + r.amount
+      WHERE product_id = r.product_id;
     END IF;
   END LOOP;
 
@@ -603,7 +622,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_update_inventory_amount
+CREATE OR REPLACE TRIGGER trg_update_inventory_amount
 AFTER UPDATE OF status
 ON descomplicai."order"
 FOR EACH ROW
